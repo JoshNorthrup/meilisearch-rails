@@ -251,12 +251,22 @@ module MeiliSearch
     # are correctly logged or thrown depending on the `raise_on_failure` option
     class SafeIndex
       def initialize(index_uid, raise_on_failure, options)
-        client = MeiliSearch::Rails.client
         primary_key = options[:primary_key] || MeiliSearch::Rails::IndexSettings::DEFAULT_PRIMARY_KEY
         @raise_on_failure = raise_on_failure.nil? || raise_on_failure
 
-        SafeIndex.log_or_throw(nil, @raise_on_failure) do
-          client.create_index(index_uid, { primary_key: primary_key })
+        find_or_create_index(index_uid, primary_key)
+      end
+
+      def find_or_create_index(index_uid, primary_key)
+        client = MeiliSearch::Rails.client
+        begin
+          SafeIndex.log_or_throw(nil, true) do
+            client.fetch_index(index_uid)
+          end
+        rescue MeiliSearch::ApiError => e
+          SafeIndex.log_or_throw(nil, @raise_on_failure) do
+            client.create_index(index_uid, { primary_key: primary_key })
+          end
         end
 
         @index = client.index(index_uid)
